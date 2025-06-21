@@ -25,9 +25,7 @@ function parseSRT(srtText: string): SrtEntry[] {
 
 function App() {
     const [srtEntries, setSrtEntries] = useState<SrtEntry[]>([]);
-    const [promptData, setPromptData] = useState<any>(null);
     const [translations, setTranslations] = useState<{ [key: number]: string }>({});
-    const [merged, setMerged] = useState<{ [key: number]: boolean }>({});
     const [loadingIndex, setLoadingIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -40,21 +38,22 @@ function App() {
             });
     }, []);
 
-    useEffect(() => {
-        fetch('/prompt.json')
-            .then((res) => res.json())
-            .then(setPromptData)
-            .catch(console.error);
-    }, []);
-
-    function getContextEntries(index: number) {
-        const context = srtEntries.slice(Math.max(0, index - 10), index)
-            .concat(srtEntries.slice(index + 1, index + 11));
-        return context.map(e => e.text);
+    function getLastTranslations(index: number) {
+        // Get the last 10 translated lines before the current index
+        const start = Math.max(0, index - 10);
+        const before: string[] = [];
+        for (let i = start; i < index; i++) {
+            before.push(translations[i] || '');
+        }
+        // Get the next 10 translated lines after the current index
+        const after: string[] = [];
+        for (let i = index + 1; i <= index + 10 && i < srtEntries.length; i++) {
+            after.push(translations[i] || '');
+        }
+        return { before, after };
     }
 
     async function handleLineClick(i: number) {
-        if (!promptData) return;
         let apiKey = localStorage.getItem('openai_api_key');
         if (!apiKey) {
             apiKey = window.prompt('Enter your OpenAI API key:') || '';
@@ -63,19 +62,26 @@ function App() {
         }
         setLoadingIndex(i);
         const entry = srtEntries[i];
-        const nextEntry = srtEntries[i + 1] || null;
-        const context = getContextEntries(i);
+        const translatedSoFar = getLastTranslations(i);
+
+        const promptData = {
+            "prompt": "you are a salafi timed subtitle translator of continuous audio. your task is to translate this salafi duroos from arabic into semi-formal <language>. you are now given 10 SRT entries, it is your job to translate the minimal part of it and return with how many of the entries this included.",
+            "summary": "shaykh saleh fawzan explains the three basic principles.",
+            "language": "english"
+        };
+
         const promptString = promptData.prompt.replace(/<language>/gi, promptData.language);
         const gptInput = {
             prompt: promptString,
             targetlanguage: promptData.language,
             summary: promptData.summary,
             srtEntry: entry.text,
-            nextSrtEntry: nextEntry ? nextEntry.text : null,
-            context: context
+            contextBefore: srtEntries.slice(Math.max(0, i - 10), i).map(e => e.text).join(' '),
+            contextAfter: srtEntries.slice(i + 1, i + 11).map(e => e.text).join(' '),
+            "alreadyTranslated": translatedSoFar.before.join(' '),
         };
         const systemMessage =
-            'You are a translation assistant. Respond ONLY with a JSON object in this format: {"translation": string, "mergedWithNextEntry": bool}.';
+            'You are a translation assistant. Respond ONLY with a JSON object in this format: {"translationOfEntries": string, "numberOfEntries": number}.';
         try {
             const res = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -100,12 +106,9 @@ function App() {
             } catch {
                 // Try to extract JSON from text
                 const match = content.match(/\{[\s\S]*\}/);
-                parsed = match ? JSON.parse(match[0]) : { translation: 'Error: Invalid response', mergedWithNextEntry: false };
+                parsed = match ? JSON.parse(match[0]) : { translationOfSrtEntry: 'Error: Invalid response' };
             }
-            setTranslations(t => ({ ...t, [i]: parsed.translation }));
-            if (parsed.mergedWithNextEntry) {
-                setMerged(m => ({ ...m, [i + 1]: true }));
-            }
+            setTranslations(t => ({ ...t, [i]: parsed.translationOfSrtEntry }));
         } catch (e) {
             setTranslations(t => ({ ...t, [i]: 'Translation error' }));
         } finally {
@@ -144,8 +147,7 @@ function App() {
                                     <td class="px-2 py-1 border-b align-top">{e.text}</td>
                                     <td class="px-2 py-1 border-b align-top text-blue-700 italic">
                                         {loadingIndex === i ? 'Translating...' :
-                                            merged[i] ? <span class="text-gray-400">(merged with previous)</span> :
-                                                translations[i] || ''}
+                                            translations[i] || ''}
                                     </td>
                                 </tr>
                             ))}
