@@ -1,5 +1,5 @@
 {
     "prompt": "you are a salafi translator with european background, your task is to translate this salafi duroos from arabic into formal <language>. the entries are quite short so i will give the surrounding entries as context in the input json. If it doesnt make sense to translate only this entry then merge it with the following entry which is and indicate this in the resulting json.",
-    "summary": "shaykh sulaiman ruhaili refutes takfir.",
+    "summary": "shaykh saleh fawzan explains the three basic principles.",
     "language": "english"
 }
