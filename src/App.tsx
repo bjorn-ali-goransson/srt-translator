@@ -25,7 +25,10 @@ function parseSRT(srtText: string): SrtEntry[] {
 
 function App() {
     const [srtEntries, setSrtEntries] = useState<SrtEntry[]>([]);
-    const [promptData, setPromptData] = useState(null);
+    const [promptData, setPromptData] = useState<any>(null);
+    const [translations, setTranslations] = useState<{ [key: number]: string }>({});
+    const [merged, setMerged] = useState<{ [key: number]: boolean }>({});
+    const [loadingIndex, setLoadingIndex] = useState<number | null>(null);
 
     useEffect(() => {
         fetch('/test.srt')
@@ -43,6 +46,72 @@ function App() {
             .then(setPromptData)
             .catch(console.error);
     }, []);
+
+    function getContextEntries(index: number) {
+        const context = srtEntries.slice(Math.max(0, index - 10), index)
+            .concat(srtEntries.slice(index + 1, index + 11));
+        return context.map(e => e.text);
+    }
+
+    async function handleLineClick(i: number) {
+        if (!promptData) return;
+        let apiKey = localStorage.getItem('openai_api_key');
+        if (!apiKey) {
+            apiKey = window.prompt('Enter your OpenAI API key:') || '';
+            if (apiKey) localStorage.setItem('openai_api_key', apiKey);
+            else return;
+        }
+        setLoadingIndex(i);
+        const entry = srtEntries[i];
+        const nextEntry = srtEntries[i + 1] || null;
+        const context = getContextEntries(i);
+        const promptString = promptData.prompt.replace(/<language>/gi, promptData.language);
+        const gptInput = {
+            prompt: promptString,
+            targetlanguage: promptData.language,
+            summary: promptData.summary,
+            srtEntry: entry.text,
+            nextSrtEntry: nextEntry ? nextEntry.text : null,
+            context: context
+        };
+        const systemMessage =
+            'You are a translation assistant. Respond ONLY with a JSON object in this format: {"translation": string, "mergedWithNextEntry": bool}.';
+        try {
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo',
+                    messages: [
+                        { role: 'system', content: systemMessage },
+                        { role: 'user', content: JSON.stringify(gptInput) }
+                    ],
+                    temperature: 0.2
+                })
+            });
+            const data = await res.json();
+            let content = data.choices?.[0]?.message?.content || '';
+            let parsed;
+            try {
+                parsed = JSON.parse(content);
+            } catch {
+                // Try to extract JSON from text
+                const match = content.match(/\{[\s\S]*\}/);
+                parsed = match ? JSON.parse(match[0]) : { translation: 'Error: Invalid response', mergedWithNextEntry: false };
+            }
+            setTranslations(t => ({ ...t, [i]: parsed.translation }));
+            if (parsed.mergedWithNextEntry) {
+                setMerged(m => ({ ...m, [i + 1]: true }));
+            }
+        } catch (e) {
+            setTranslations(t => ({ ...t, [i]: 'Translation error' }));
+        } finally {
+            setLoadingIndex(null);
+        }
+    }
 
     // Format message for a single SRT entry
     function prepareMessageForEntry(entry: SrtEntry) {
@@ -68,16 +137,16 @@ function App() {
                             {srtEntries.map((e, i) => (
                                 <tr key={i} class={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                                     style={{ cursor: 'pointer' }}
-                                    onClick={() => {
-                                        const msg = prepareMessageForEntry(e);
-                                        // eslint-disable-next-line no-console
-                                        console.log(msg);
-                                    }}
+                                    onClick={() => handleLineClick(i)}
                                 >
                                     <td class="px-2 py-1 border-b align-top">{e.index}</td>
                                     <td class="px-2 py-1 border-b align-top whitespace-nowrap">{e.start} <br />→ {e.end}</td>
                                     <td class="px-2 py-1 border-b align-top">{e.text}</td>
-                                    <td class="px-2 py-1 border-b align-top text-blue-700 italic">{/* Translated content placeholder */}</td>
+                                    <td class="px-2 py-1 border-b align-top text-blue-700 italic">
+                                        {loadingIndex === i ? 'Translating...' :
+                                            merged[i] ? <span class="text-gray-400">(merged with previous)</span> :
+                                                translations[i] || ''}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
