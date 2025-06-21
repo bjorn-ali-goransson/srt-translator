@@ -29,7 +29,7 @@ function App() {
     const [loadingIndex, setLoadingIndex] = useState<number | null>(null);
 
     useEffect(() => {
-        fetch('/test.srt')
+        fetch('./test.srt')
             .then(res => res.ok ? res.text() : null)
             .then(text => {
                 if (text) {
@@ -73,15 +73,10 @@ function App() {
         const promptString = promptData.prompt.replace(/<language>/gi, promptData.language);
         const gptInput = {
             prompt: promptString,
-            targetlanguage: promptData.language,
-            summary: promptData.summary,
-            srtEntry: entry.text,
-            contextBefore: srtEntries.slice(Math.max(0, i - 10), i).map(e => e.text).join(' '),
-            contextAfter: srtEntries.slice(i + 1, i + 11).map(e => e.text).join(' '),
-            "alreadyTranslated": translatedSoFar.before.join(' '),
+            srtEntries: srtEntries.slice(i, i + 10),
         };
         const systemMessage =
-            'You are a translation assistant. Respond ONLY with a JSON object in this format: {"translationOfEntries": string, "numberOfEntries": number}.';
+            'You are a translation assistant. Respond ONLY with a JSON object in this format: {"translationOfEntries": string, "numberOfEntriesTranslated": number}.';
         try {
             const res = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -106,9 +101,18 @@ function App() {
             } catch {
                 // Try to extract JSON from text
                 const match = content.match(/\{[\s\S]*\}/);
-                parsed = match ? JSON.parse(match[0]) : { translationOfSrtEntry: 'Error: Invalid response' };
+                parsed = match ? JSON.parse(match[0]) : { translationOfEntries: 'Error: Invalid response', numberOfEntriesTranslated: 1 };
             }
-            setTranslations(t => ({ ...t, [i]: parsed.translationOfSrtEntry }));
+            // Fill the clicked entry with the translation, and the next (numberOfEntriesTranslated-1) with "(translated above)"
+            setTranslations(t => {
+                const updated = { ...t };
+                updated[i] = parsed.translationOfEntries;
+                const n = Math.max(1, parsed.numberOfEntriesTranslated || 1);
+                for (let j = 1; j < n && i + j < srtEntries.length; j++) {
+                    updated[i + j] = '(translated above)';
+                }
+                return updated;
+            });
         } catch (e) {
             setTranslations(t => ({ ...t, [i]: 'Translation error' }));
         } finally {
