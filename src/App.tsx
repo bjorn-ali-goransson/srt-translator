@@ -65,7 +65,7 @@ function App() {
         const translatedSoFar = getLastTranslations(i);
 
         const promptData = {
-            "prompt": "you are a salafi timed subtitle translator of continuous audio. your task is to translate this salafi duroos from arabic into semi-formal <language>. you are now given 10 SRT entries, it is your job to translate the minimal part of it and return with how many of the entries this included.",
+            "prompt": "you are a salafi timed subtitle translator of continuous audio. your task is to translate this salafi duroos from arabic into semi-formal <language>. you are now given a srtEntries JSON property with a LIST of 10 SRT entries. DONT TRANSLATE ALL OF THEM! it is your job to translate the minimal part of it and return with how many of the entries this included.",
             "summary": "shaykh saleh fawzan explains the three basic principles.",
             "language": "english"
         };
@@ -73,7 +73,7 @@ function App() {
         const promptString = promptData.prompt.replace(/<language>/gi, promptData.language);
         const gptInput = {
             prompt: promptString,
-            srtEntries: srtEntries.slice(i, i + 10),
+            srtEntries: srtEntries.slice(i, i + 10).map(e => e.text),
         };
         const systemMessage =
             'You are a translation assistant. Respond ONLY with a JSON object in this format: {"translationOfEntries": string, "numberOfEntriesTranslated": number}.';
