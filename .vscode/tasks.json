@@ -11,14 +11,6 @@
 		},
 		{
 			"type": "npm",
-			"script": "deploy",
-			"group": "build",
-			"problemMatcher": [],
-			"label": "npm: deploy",
-			"detail": "vite deploy"
-		},
-		{
-			"type": "npm",
 			"script": "test",
 			"group": "build",
 			"problemMatcher": [],
