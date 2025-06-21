@@ -25,6 +25,7 @@ function parseSRT(srtText: string): SrtEntry[] {
 
 function App() {
     const [srtEntries, setSrtEntries] = useState<SrtEntry[]>([]);
+    const [promptData, setPromptData] = useState(null);
 
     useEffect(() => {
         fetch('/test.srt')
@@ -34,6 +35,13 @@ function App() {
                     setSrtEntries(parseSRT(text));
                 }
             });
+    }, []);
+
+    useEffect(() => {
+        fetch('/prompt.json')
+            .then((res) => res.json())
+            .then(setPromptData)
+            .catch(console.error);
     }, []);
 
     // Format message for a single SRT entry
