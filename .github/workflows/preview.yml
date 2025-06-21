@@ -1,0 +1,134 @@
+name: Deploy PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build with PR base path
+        run: npx vite build --base="/preview/pr${{ github.event.number }}/"
+
+      - name: Deploy to gh-pages
+        run: |
+          # Configure git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create a temporary directory for gh-pages content
+          mkdir -p /tmp/gh-pages
+          cd /tmp/gh-pages
+
+          # Try to clone the gh-pages branch, create it if it doesn't exist
+          if git clone --branch gh-pages --single-branch https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git . 2>/dev/null; then
+            echo "gh-pages branch exists, using existing content"
+          else
+            echo "gh-pages branch doesn't exist, creating new one"
+            git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+            git checkout --orphan gh-pages
+            git rm -rf . || true
+            echo "# GitHub Pages" > README.md
+            git add README.md
+            git commit -m "Initialize gh-pages branch" || true
+          fi
+
+          # Create/update the preview directory
+          rm -rf preview/pr${{ github.event.number }}
+          mkdir -p preview/pr${{ github.event.number }}
+
+          # Verify dist directory exists
+          if [ ! -d "${{ github.workspace }}/dist" ]; then
+            echo "Error: dist directory not found"
+            exit 1
+          fi
+
+          # Copy built files to preview directory
+          cp -r ${{ github.workspace }}/dist/* preview/pr${{ github.event.number }}/
+
+          # Add and commit changes
+          git add preview/pr${{ github.event.number }}
+          if git commit -m "Preview for PR #${{ github.event.number }}"; then
+            echo "Changes committed successfully"
+          else
+            echo "No changes to commit"
+          fi
+
+          # Push changes
+          git push origin gh-pages
+
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const repoOwner = context.repo.owner;
+            const repoName = context.repo.repo;
+            
+            // Read CNAME file to get custom domain
+            const fs = require('fs');
+            const path = require('path');
+            let customDomain = '';
+            try {
+              const cnamePath = path.join(process.env.GITHUB_WORKSPACE, 'public', 'CNAME');
+              customDomain = fs.readFileSync(cnamePath, 'utf8').trim();
+            } catch (error) {
+              console.log('CNAME file not found, falling back to GitHub Pages domain');
+            }
+            
+            const previewUrl = customDomain 
+              ? `https://${customDomain}/preview/pr${prNumber}/`
+              : `https://${repoOwner}.github.io/${repoName}/preview/pr${prNumber}/`;
+
+            const comment = `🚀 **Preview deployed!**
+
+            Preview this PR at: ${previewUrl}
+
+            The preview will be automatically updated when you push new commits to this PR.`;
+
+            // Find existing preview comment
+            const comments = await github.rest.issues.listComments({
+              owner: repoOwner,
+              repo: repoName,
+              issue_number: prNumber,
+            });
+
+            const existingComment = comments.data.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('Preview deployed!')
+            );
+
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: repoOwner,
+                repo: repoName,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: repoOwner,
+                repo: repoName,
+                issue_number: prNumber,
+                body: comment
+              });
+            }

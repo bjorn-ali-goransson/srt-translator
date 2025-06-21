@@ -1,0 +1,50 @@
+// Place your key bindings in this file to override the defaults
+[
+  {
+    "key": "ctrl+q",
+    "command": "runCommands",
+    "args": {
+      "commands": [
+        "git.stageAll",
+        "github.copilot.git.generateCommitMessage",
+        "git.commit",
+        "git.sync"
+      ]
+    }
+  },
+  {
+    "key": "ctrl+alt+m",
+    "command": "github.copilot.git.generateCommitMessage"
+  },
+  {
+    "key": "ctrl+alt+g",
+    "command": "-workbench.action.terminal.sendSequence",
+    "when": "terminalFocus"
+  },
+  {
+    "key": "ctrl+alt+g",
+    "command": "workbench.view.scm",
+    "when": "workbench.scm.active"
+  },
+  {
+    "key": "ctrl+alt+c",
+    "command": "-debug.copyWatchExpression",
+    "when": "watchExpressionsExist && !expressionSelected && focusedView == 'workbench.debug.watchExpressionsView'"
+  },
+  {
+    "key": "ctrl+alt+c",
+    "command": "git.commit"
+  },
+  {
+    "key": "ctrl+alt+s",
+    "command": "saveAll"
+  },
+  {
+    "key": "ctrl+k s",
+    "command": "-saveAll"
+  },
+  {
+    "key": "alt+s",
+    "command": "git.sync"
+  }
+]

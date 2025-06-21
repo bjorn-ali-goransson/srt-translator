@@ -1,0 +1,25 @@
+{
+	"compilerOptions": {
+		"target": "ES2020",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"noEmit": true,
+		"forceConsistentCasingInFileNames": true,
+		"allowJs": true,
+		"checkJs": true,
+		"strictNullChecks": true,
+		"jsx": "react-jsx",
+		"jsxImportSource": "preact"
+	},
+	"include": [
+		"**/*"
+	],
+	"exclude": [
+		"node_modules",
+		"dist",
+		"build",
+		"out-tsc",
+		"out-tsc-esm",
+		"out-tsc-cjs"
+	]
+}
